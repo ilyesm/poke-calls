@@ -114,7 +114,7 @@ const TOOLS = [
       type: "object",
       required: ["to_number", "contact_name", "objective"],
       properties: {
-        to_number:      { type: "string", description: "Phone number in E.164 format, e.g. +971501234567" },
+        to_number:      { type: "string", description: "Phone number in E.164 format, e.g. +15551234567" },
         contact_name:   { type: "string", description: "Full name of the person being called" },
         objective:      { type: "string", description: "What the call should achieve" },
         context:        { type: "string", description: "Optional background on this contact or situation" },

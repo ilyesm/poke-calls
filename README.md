@@ -36,7 +36,7 @@ cp .dev.vars.example .dev.vars
 | `ELEVENLABS_API_KEY` | Your ElevenLabs API key (from Profile > API Keys) |
 | `ELEVENLABS_AGENT_ID` | Your ElevenLabs Conversational AI agent ID |
 | `ELEVENLABS_PHONE_NUMBER_ID` | The Twilio phone number ID linked in ElevenLabs |
-| `TRANSFER_NUMBER` | Your phone number in E.164 format (e.g. `+971501234567`) — calls transfer here when the caller asks for a human |
+| `TRANSFER_NUMBER` | Your phone number in E.164 format (e.g. `+15551234567`) — calls transfer here when the caller asks for a human |
 | `USER_NAME` | Your name — the agent introduces itself as "[name]'s assistant" |
 | `MCP_AUTH_TOKEN` | A shared secret to authenticate Poke. Generate one with `openssl rand -hex 32` |
 

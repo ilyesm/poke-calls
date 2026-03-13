@@ -8,5 +8,27 @@
   },
   "devDependencies": {
     "wrangler": "^4"
+  },
+  "cloudflare": {
+    "bindings": {
+      "ELEVENLABS_API_KEY": {
+        "description": "Your ElevenLabs API key from [Profile > API Keys](https://elevenlabs.io/app/settings/api-keys)"
+      },
+      "ELEVENLABS_AGENT_ID": {
+        "description": "Your ElevenLabs Conversational AI agent ID"
+      },
+      "ELEVENLABS_PHONE_NUMBER_ID": {
+        "description": "The Twilio phone number ID linked in your ElevenLabs agent"
+      },
+      "TRANSFER_NUMBER": {
+        "description": "Your phone number in E.164 format (e.g. `+15551234567`) — calls transfer here when a human is needed"
+      },
+      "USER_NAME": {
+        "description": "Your name — the agent introduces itself as \"[name]'s assistant\""
+      },
+      "MCP_AUTH_TOKEN": {
+        "description": "A shared secret to authenticate Poke. Generate one with `openssl rand -hex 32`"
+      }
+    }
   }
 }
