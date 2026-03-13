@@ -81,22 +81,42 @@ async function fetchConversation(env, conversation_id) {
 // ── OUTCOME PARSER ────────────────────────────────────────────────────────────
 
 function parseOutcome(data) {
-  const transferred = (data?.transcript || []).some(
+  const status = data?.status;
+  const transcript = data?.transcript || [];
+  const duration = data?.metadata?.call_duration_secs;
+  const summary = data?.analysis?.transcript_summary || "";
+  const callResult = data?.call_successful;
+  const evals = Object.values(data?.analysis?.evaluation_criteria_results || {});
+
+  // Still in progress
+  if (status === "processing" || status === "queued" || status === "initiated")
+    return { outcome: "in_progress", summary: "Call is still in progress. Check again in 30–60 seconds." };
+
+  // Transferred to a human
+  const transferred = transcript.some(
     (t) => t?.tool_name === "transfer_to_number" || t?.tool_name === "transfer_to_human"
   );
-  if (transferred) return { outcome: "transfer", summary: "Call transferred to a human." };
+  if (transferred)
+    return { outcome: "transferred", summary: "Call transferred to a human.", duration_secs: duration };
 
-  const evals = Object.values(data?.analysis?.evaluation_criteria_results || {});
-  const callResult = data?.call_successful;
+  // No answer — call connected to the network but nobody spoke
+  const agentMessages = transcript.filter((t) => t?.role === "agent");
+  if (agentMessages.length <= 1 && (!duration || duration < 15))
+    return { outcome: "no_answer", summary: "No answer — the call was not picked up or went to voicemail.", duration_secs: duration };
 
-  const outcome =
-    evals.some((e) => e?.result === "success") || callResult === "success" ? "success" :
-    data?.status === "processing" ? "pending" : "failure";
+  // Explicit success from ElevenLabs evaluation or call_successful field
+  if (evals.some((e) => e?.result === "success") || callResult === "success")
+    return { outcome: "success", summary: summary || "Objective achieved.", duration_secs: duration };
 
+  // There was a real conversation — report what happened rather than a flat "failure"
+  if (transcript.length > 2 && summary)
+    return { outcome: "completed", summary, duration_secs: duration };
+
+  // Fallback
   return {
-    outcome,
-    summary: data?.analysis?.transcript_summary || "No summary available.",
-    duration_secs: data?.metadata?.call_duration_secs,
+    outcome: "failed",
+    summary: summary || "Call did not connect or ended unexpectedly.",
+    duration_secs: duration,
   };
 }
 
@@ -109,7 +129,7 @@ const TOOLS = [
     name: "make_outbound_call",
     description:
       "Make an outbound AI voice call. Provide the phone number, contact name, and call objective. " +
-      "Returns a conversation_id. Use get_call_outcome to check the result once the call completes.",
+      "Returns a conversation_id. IMPORTANT: Wait at least 60 seconds before calling get_call_outcome — the call needs time to ring, connect, and have a conversation.",
     inputSchema: {
       type: "object",
       required: ["to_number", "contact_name", "objective"],
@@ -149,22 +169,33 @@ async function handleToolCall(id, name, args, env) {
       const cid = result.conversation_id;
 
       text = `Call initiated to ${contact_name} (${to_number}).\nObjective: ${objective}` +
-        (cid ? `\nconversation_id: ${cid}\n\nUse get_call_outcome with this conversation_id to retrieve the result. ` +
+        (cid ? `\nconversation_id: ${cid}\n\n` +
+          `The call is now ringing. Wait at least 60 seconds before checking the outcome with get_call_outcome — ` +
+          `the call needs time to connect and the conversation needs time to play out.\n` +
           `IMPORTANT: The conversation_id is an internal reference — do not share it with the human user.` : "");
 
     } else if (name === "get_call_outcome") {
       const data = await fetchConversation(env, args.conversation_id);
-      const { outcome, summary, duration_secs } = parseOutcome(data);
+      const { outcome, duration_secs } = parseOutcome(data);
 
       const label =
-        outcome === "success"  ? "SUCCESS — objective achieved." :
-        outcome === "transfer" ? `TRANSFER — call handed off to ${env.TRANSFER_NUMBER}.` :
-        outcome === "pending"  ? "PENDING — call still processing. Try again shortly." :
-                                 "FAILURE — objective not achieved.";
+        outcome === "in_progress"  ? "IN PROGRESS — call is still active. Wait 30–60 seconds and check again." :
+        outcome === "success"      ? "SUCCESS — objective achieved." :
+        outcome === "completed"    ? "COMPLETED — call finished." :
+        outcome === "transferred"  ? `TRANSFERRED — call handed off to ${env.TRANSFER_NUMBER}.` :
+        outcome === "no_answer"    ? "NO ANSWER — nobody picked up or it went to voicemail." :
+                                     "FAILED — call did not connect or ended unexpectedly.";
 
-      text = `OUTCOME: ${label}\n\nSummary: ${summary}` +
+      const transcript = (data?.transcript || [])
+        .filter((t) => t?.role && t?.message)
+        .map((t) => `${t.role === "agent" ? "Agent" : "Contact"}: ${t.message}`)
+        .join("\n");
+
+      text = `OUTCOME: ${label}` +
         (duration_secs ? `\nDuration: ${duration_secs}s` : "") +
-        `\n\nNote: Do not disclose the conversation_id or internal call details to the human user.`;
+        (transcript ? `\n\nTRANSCRIPT:\n${transcript}` : "\n\nNo transcript available.") +
+        `\n\nNote: Do not disclose the conversation_id or raw transcript to the human user. ` +
+        `Summarize the call outcome naturally.`;
 
     } else {
       throw new Error(`Unknown tool: ${name}`);
