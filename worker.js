@@ -78,6 +78,36 @@ async function fetchConversation(env, conversation_id) {
   return res.json();
 }
 
+async function waitForConversation(env, conversation_id, { maxWaitMs = 120_000, intervalMs = 10_000 } = {}) {
+  const deadline = Date.now() + maxWaitMs;
+  let attempt = 0;
+  while (Date.now() < deadline) {
+    attempt++;
+    const data = await fetchConversation(env, conversation_id);
+    const status = data?.status;
+    const transcript = data?.transcript || [];
+    const duration = data?.metadata?.call_duration_secs;
+
+    console.log(`[waitForConversation] attempt=${attempt} status=${status} transcript_length=${transcript.length} duration=${duration}`);
+
+    // Only consider the call finished if:
+    // 1. Status indicates completion AND there's either a transcript or enough time has passed for a no-answer
+    const isTerminalStatus = status === "done" || status === "completed" || status === "failed" || status === "error";
+    if (isTerminalStatus && (transcript.length > 0 || duration > 0)) {
+      return data;
+    }
+
+    // If we've been polling for at least 90 seconds and status is terminal, give up waiting for transcript
+    if (isTerminalStatus && (Date.now() + 30_000 > deadline)) {
+      return data;
+    }
+
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  // Return whatever we have after timeout
+  return fetchConversation(env, conversation_id);
+}
+
 // ── OUTCOME PARSER ────────────────────────────────────────────────────────────
 
 function parseOutcome(data) {
@@ -129,7 +159,8 @@ const TOOLS = [
     name: "make_outbound_call",
     description:
       "Make an outbound AI voice call. Provide the phone number, contact name, and call objective. " +
-      "Returns a conversation_id. IMPORTANT: Wait at least 60 seconds before calling get_call_outcome — the call needs time to ring, connect, and have a conversation.",
+      "This tool will place the call and wait for it to complete before returning the outcome and transcript. " +
+      "It may take up to 2 minutes to respond — this is normal.",
     inputSchema: {
       type: "object",
       required: ["to_number", "contact_name", "objective"],
@@ -145,7 +176,7 @@ const TOOLS = [
   },
   {
     name: "get_call_outcome",
-    description: "Get the outcome of a completed call: success, failure, or transfer, plus a summary.",
+    description: "Get the outcome of a call. This will wait up to 2 minutes for the call to finish before returning the result. You can call this immediately after make_outbound_call.",
     inputSchema: {
       type: "object",
       required: ["conversation_id"],
@@ -166,20 +197,46 @@ async function handleToolCall(id, name, args, env) {
         throw new Error("to_number, contact_name, and objective are required.");
 
       const result = await startCall(env, { to_number, contact_name, objective, context, language, first_message });
-      const cid = result.conversation_id;
+      const cid = result.conversation_id || result.call_id || result.id;
 
-      text = `Call initiated to ${contact_name} (${to_number}).\nObjective: ${objective}` +
-        (cid ? `\nconversation_id: ${cid}\n\n` +
-          `The call is now ringing. Wait at least 60 seconds before checking the outcome with get_call_outcome — ` +
-          `the call needs time to connect and the conversation needs time to play out.\n` +
-          `IMPORTANT: The conversation_id is an internal reference — do not share it with the human user.` : "");
+      console.log("[make_outbound_call] ElevenLabs response:", JSON.stringify(result));
+
+      if (!cid) {
+        text = `Call request sent to ${contact_name} (${to_number}) but no conversation ID was returned.\n` +
+          `ElevenLabs response: ${JSON.stringify(result)}\n` +
+          `The call may still be processing.`;
+      } else {
+        // Wait for the call to finish before responding
+        const data = await waitForConversation(env, cid);
+        const { outcome, duration_secs } = parseOutcome(data);
+
+        const label =
+          outcome === "in_progress"  ? "IN PROGRESS — call is still active." :
+          outcome === "success"      ? "SUCCESS — objective achieved." :
+          outcome === "completed"    ? "COMPLETED — call finished." :
+          outcome === "transferred"  ? `TRANSFERRED — call handed off to ${env.TRANSFER_NUMBER}.` :
+          outcome === "no_answer"    ? "NO ANSWER — nobody picked up or it went to voicemail." :
+                                       "FAILED — call did not connect or ended unexpectedly.";
+
+        const transcript = (data?.transcript || [])
+          .filter((t) => t?.role && t?.message)
+          .map((t) => `${t.role === "agent" ? "Agent" : "Contact"}: ${t.message}`)
+          .join("\n");
+
+        text = `Call to ${contact_name} (${to_number}) — ${label}` +
+          (duration_secs ? `\nDuration: ${duration_secs}s` : "") +
+          (transcript ? `\n\nTRANSCRIPT:\n${transcript}` : "\n\nNo transcript available.") +
+          `\nconversation_id: ${cid}` +
+          `\n\nNote: Do not disclose the conversation_id or raw transcript to the human user. ` +
+          `Summarize the call outcome naturally.`;
+      }
 
     } else if (name === "get_call_outcome") {
-      const data = await fetchConversation(env, args.conversation_id);
+      const data = await waitForConversation(env, args.conversation_id);
       const { outcome, duration_secs } = parseOutcome(data);
 
       const label =
-        outcome === "in_progress"  ? "IN PROGRESS — call is still active. Wait 30–60 seconds and check again." :
+        outcome === "in_progress"  ? "IN PROGRESS — call is still active. Try again in 30 seconds." :
         outcome === "success"      ? "SUCCESS — objective achieved." :
         outcome === "completed"    ? "COMPLETED — call finished." :
         outcome === "transferred"  ? `TRANSFERRED — call handed off to ${env.TRANSFER_NUMBER}.` :
