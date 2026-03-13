@@ -1,6 +1,6 @@
 {
   "name": "poke-calls",
-  "main": "elevenlabs-outbound-worker.js",
+  "main": "worker.js",
   "compatibility_date": "2024-11-05"
   // All env vars are secrets — set via `wrangler secret put <NAME>`:
   //   ELEVENLABS_API_KEY
