@@ -1,14 +1,14 @@
 {
   "name": "poke-calls",
   "main": "elevenlabs-outbound-worker.js",
-  "compatibility_date": "2024-11-05",
-  "vars": {
-    "ELEVENLABS_AGENT_ID": "",
-    "ELEVENLABS_PHONE_NUMBER_ID": "",
-    "TRANSFER_NUMBER": "",
-    "USER_NAME": ""
-  }
-  // Secrets (set via `wrangler secret put <NAME>`):
+  "compatibility_date": "2024-11-05"
+  // All env vars are secrets — set via `wrangler secret put <NAME>`:
   //   ELEVENLABS_API_KEY
+  //   ELEVENLABS_AGENT_ID
+  //   ELEVENLABS_PHONE_NUMBER_ID
+  //   TRANSFER_NUMBER
+  //   USER_NAME
   //   MCP_AUTH_TOKEN
+  //
+  // For local dev, fill in .dev.vars (not committed)
 }

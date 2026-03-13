@@ -2,14 +2,12 @@
  * Cloudflare Worker — ElevenLabs Outbound Call MCP Server
  * Connects to Poke (Interaction Co.) as a custom MCP integration.
  *
- * Env vars (set in wrangler.jsonc):
+ * All config via secrets (wrangler secret put <NAME>) or .dev.vars locally:
+ *   ELEVENLABS_API_KEY         ElevenLabs API key
  *   ELEVENLABS_AGENT_ID        Conversational AI agent ID
  *   ELEVENLABS_PHONE_NUMBER_ID Twilio phone number ID linked in ElevenLabs
  *   TRANSFER_NUMBER            Phone number to transfer calls to (E.164)
  *   USER_NAME                  Name of the person the agent represents
- *
- * Secrets (wrangler secret put <NAME>):
- *   ELEVENLABS_API_KEY         ElevenLabs API key
  *   MCP_AUTH_TOKEN             Bearer token you enter in Poke when adding the integration
  */
 

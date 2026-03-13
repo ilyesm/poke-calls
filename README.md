@@ -23,28 +23,24 @@ cd poke-calls
 npm install
 ```
 
-### 2. Configure environment variables
+### 2. Configure for local development
 
-Edit `wrangler.jsonc` and fill in the `vars`:
+Copy `.dev.vars.example` to `.dev.vars` and fill in your values:
+
+```bash
+cp .dev.vars.example .dev.vars
+```
 
 | Variable | Description |
 |---|---|
+| `ELEVENLABS_API_KEY` | Your ElevenLabs API key (from Profile > API Keys) |
 | `ELEVENLABS_AGENT_ID` | Your ElevenLabs Conversational AI agent ID |
 | `ELEVENLABS_PHONE_NUMBER_ID` | The Twilio phone number ID linked in ElevenLabs |
 | `TRANSFER_NUMBER` | Your phone number in E.164 format (e.g. `+971501234567`) — calls transfer here when the caller asks for a human |
 | `USER_NAME` | Your name — the agent introduces itself as "[name]'s assistant" |
+| `MCP_AUTH_TOKEN` | A shared secret to authenticate Poke. Generate one with `openssl rand -hex 32` |
 
-### 3. Set secrets
-
-```bash
-wrangler secret put ELEVENLABS_API_KEY
-wrangler secret put MCP_AUTH_TOKEN
-```
-
-- **`ELEVENLABS_API_KEY`** — Your ElevenLabs API key (from Profile > API Keys)
-- **`MCP_AUTH_TOKEN`** — A shared secret to authenticate Poke. Generate one with `openssl rand -hex 32`
-
-### 4. ElevenLabs agent setup
+### 3. ElevenLabs agent setup
 
 In your ElevenLabs Conversational AI agent, add these two tools:
 
@@ -53,15 +49,26 @@ In your ElevenLabs Conversational AI agent, add these two tools:
 
 The worker overrides the agent's system prompt and greeting at call time, so the agent's default prompt in ElevenLabs doesn't matter much.
 
-### 5. Deploy
+### 4. Deploy
 
 ```bash
 npm run deploy
 ```
 
+Then set all secrets for production:
+
+```bash
+wrangler secret put ELEVENLABS_API_KEY
+wrangler secret put ELEVENLABS_AGENT_ID
+wrangler secret put ELEVENLABS_PHONE_NUMBER_ID
+wrangler secret put TRANSFER_NUMBER
+wrangler secret put USER_NAME
+wrangler secret put MCP_AUTH_TOKEN
+```
+
 Your worker will be live at `https://poke-calls.<your-subdomain>.workers.dev`.
 
-### 6. Connect to Poke
+### 5. Connect to Poke
 
 Add a custom MCP integration in Poke:
 
