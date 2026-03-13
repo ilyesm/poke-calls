@@ -18,7 +18,7 @@ The agent introduces itself as your personal assistant, makes calls on your beha
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/<your-username>/poke-calls.git
+git clone https://github.com/ilyesm/poke-calls.git
 cd poke-calls
 npm install
 ```
